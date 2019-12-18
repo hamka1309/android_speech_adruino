@@ -1,11 +1,9 @@
 package com.zaidimarvels.voiceapp;
 
-import android.Manifest;
 import android.app.Activity;
+import android.content.ActivityNotFoundException;
 import android.content.Intent;
-import android.content.pm.PackageManager;
 import android.os.Bundle;
-import android.speech.RecognitionListener;
 import android.speech.RecognizerIntent;
 import android.speech.SpeechRecognizer;
 import android.speech.tts.TextToSpeech;
@@ -19,12 +17,9 @@ import android.widget.Toast;
 
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.appcompat.widget.SwitchCompat;
-import androidx.core.app.ActivityCompat;
-import androidx.core.content.ContextCompat;
-
 import com.google.android.material.floatingactionbutton.FloatingActionButton;
 
-import java.util.List;
+import java.util.ArrayList;
 import java.util.Locale;
 
 import app.akexorcist.bluetotohspp.library.BluetoothSPP;
@@ -35,8 +30,7 @@ import butterknife.ButterKnife;
 import butterknife.OnClick;
 
 public class MainActivity extends AppCompatActivity {
-
-    private static final int MY_PERMISSIONS_REQUEST_RECORD_AUDIO = 1;
+    public static final int REQ_CODE = 100;
     public final String ON_DOOR = "1";
     public final String OFF_DOOR = "2";
     public final String ON_FAN = "60";
@@ -127,80 +121,21 @@ public class MainActivity extends AppCompatActivity {
         onClickSwitch();
 
         fab.setOnClickListener(view -> {
-            if (ContextCompat.checkSelfPermission(MainActivity.this,
-                    Manifest.permission.RECORD_AUDIO)
-                    != PackageManager.PERMISSION_GRANTED) {
-                if (ActivityCompat.shouldShowRequestPermissionRationale(MainActivity.this,
-                        Manifest.permission.RECORD_AUDIO)) {
-                } else {
-                    ActivityCompat.requestPermissions(MainActivity.this,
-                            new String[]{Manifest.permission.RECORD_AUDIO}, MY_PERMISSIONS_REQUEST_RECORD_AUDIO);
-                }
-            } else {
-                // Permission has already been granted
-                Intent intent = new Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH);
-                intent.putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM);
-                intent.putExtra(RecognizerIntent.EXTRA_MAX_RESULTS, 1);
-                speechRecog.startListening(intent);
+
+            Intent intent = new Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH);
+            intent.putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM);
+            intent.putExtra(RecognizerIntent.EXTRA_LANGUAGE, Locale.getDefault());
+            intent.putExtra(RecognizerIntent.EXTRA_PROMPT, R.string.voice_need_to_speak);
+            try {
+                this.startActivityForResult(intent, REQ_CODE);
+            } catch (ActivityNotFoundException a) {
+                Toast.makeText(this, getResources().getString(R.string.no_support_voice), Toast.LENGTH_SHORT).show();
             }
         });
 
-        initializeTextToSpeech();
-        initializeSpeechRecognizer();
     }
 
-    private void initializeSpeechRecognizer() {
-        if (SpeechRecognizer.isRecognitionAvailable(this)) {
-            speechRecog = SpeechRecognizer.createSpeechRecognizer(this);
-            speechRecog.setRecognitionListener(new RecognitionListener() {
-                @Override
-                public void onReadyForSpeech(Bundle params) {
-
-                }
-
-                @Override
-                public void onBeginningOfSpeech() {
-
-                }
-
-                @Override
-                public void onRmsChanged(float rmsdB) {
-
-                }
-
-                @Override
-                public void onBufferReceived(byte[] buffer) {
-
-                }
-
-                @Override
-                public void onEndOfSpeech() {
-                }
-
-                @Override
-                public void onError(int error) {
-
-                }
-
-                @Override
-                public void onResults(Bundle results) {
-                    List<String> result_arr = results.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION);
-                    processResult(result_arr.get(0));
-                }
-
-                @Override
-                public void onPartialResults(Bundle partialResults) {
-                }
-
-                @Override
-                public void onEvent(int eventType, Bundle params) {
-
-                }
-            });
-        }
-    }
-
-    private void processResult(String result_message) {
+    private void onResultVoid(String result_message) {
         result_message = result_message.toLowerCase();
         Toast.makeText(this, result_message, Toast.LENGTH_SHORT).show();
         if (result_message.equalsIgnoreCase("turn on led gara")) {
@@ -228,25 +163,11 @@ public class MainActivity extends AppCompatActivity {
         } else if (result_message.equalsIgnoreCase("turn off door")) {
             bluetooth.send(OFF_DOOR, true);
         } else if (result_message.equalsIgnoreCase("turn on fan")) {
-            Log.e("ha", "processResult: " );
+            Log.e("ha", "processResult: ");
             bluetooth.send(ON_FAN, true);
         } else if (result_message.equalsIgnoreCase("turn off fan")) {
             bluetooth.send(OFF_FAN, true);
         }
-    }
-
-    private void initializeTextToSpeech() {
-        tts = new TextToSpeech(this, new TextToSpeech.OnInitListener() {
-            @Override
-            public void onInit(int status) {
-                if (tts.getEngines().size() == 0) {
-                    Toast.makeText(MainActivity.this, getString(R.string.tts_no_engines), Toast.LENGTH_LONG).show();
-                    finish();
-                } else {
-                    tts.setLanguage(Locale.US);
-                }
-            }
-        });
     }
 
     public void onStart() {
@@ -361,19 +282,21 @@ public class MainActivity extends AppCompatActivity {
                         , Toast.LENGTH_SHORT).show();
                 finish();
             }
+        } else if (requestCode == REQ_CODE) {
+            if (resultCode == RESULT_OK && null != data) {
+                ArrayList result = data.getStringArrayListExtra(RecognizerIntent.EXTRA_RESULTS);
+                this.onResultVoid(result.get(0).toString());
+            }
         }
     }
 
     @Override
     protected void onPause() {
         super.onPause();
-        tts.shutdown();
     }
 
     @Override
     protected void onResume() {
         super.onResume();
-        initializeSpeechRecognizer();
-        initializeTextToSpeech();
     }
 }

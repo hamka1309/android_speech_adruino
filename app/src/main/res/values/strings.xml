@@ -2,4 +2,6 @@
     <string name="app_name">VoiceApp</string>
     <string name="action_settings">Settings</string>
     <string name="tts_no_engines">There were no Text to Speech Engines located in the device</string>
+    <string name="no_support_voice">Sorry your device not supported</string>
+    <string name="voice_need_to_speak">Need to speak</string>
 </resources>
