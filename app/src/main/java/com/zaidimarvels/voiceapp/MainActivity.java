@@ -17,6 +17,7 @@ import android.widget.Toast;
 
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.appcompat.widget.SwitchCompat;
+
 import com.google.android.material.floatingactionbutton.FloatingActionButton;
 
 import java.util.ArrayList;
@@ -33,6 +34,8 @@ public class MainActivity extends AppCompatActivity {
     public static final int REQ_CODE = 100;
     public final String ON_DOOR = "1";
     public final String OFF_DOOR = "2";
+    public final String TURN_ON = "4";
+    public final String TURN_OFF = "5";
     public final String ON_FAN = "60";
     public final String OFF_FAN = "61";
     public final String ON_LED_LIV = "10";
@@ -80,48 +83,47 @@ public class MainActivity extends AppCompatActivity {
     private BluetoothSPP bluetooth;
     private TextToSpeech tts;
     private SpeechRecognizer speechRecog;
+    private String TAG = "ha";
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
         ButterKnife.bind(this);
+
         layoutFan.setVisibility(View.GONE);
+
         layoutGara.setVisibility(View.GONE);
+
         layoutLed.setVisibility(View.GONE);
+
         bluetooth = new BluetoothSPP(this);
 
         if (!bluetooth.isBluetoothAvailable()) {
-            Toast.makeText(getApplicationContext(), "Bluetooth is not available", Toast.LENGTH_SHORT).show();
+            Toast.makeText(getApplicationContext()
+                    , "Bluetooth is not available"
+                    , Toast.LENGTH_SHORT).show();
             finish();
         }
 
-        bluetooth.setBluetoothConnectionListener(new BluetoothSPP.BluetoothConnectionListener() {
-            public void onDeviceConnected(String name, String address) {
-                btConnect.setText("Connected to " + name);
-            }
+        bluetooth.setBluetoothConnectionListener(
 
-            public void onDeviceDisconnected() {
-                btConnect.setText("Connection lost");
-            }
+                new BluetoothSPP.BluetoothConnectionListener() {
+                    public void onDeviceConnected(String name, String address) {
+                        btConnect.setText("Connected to " + name);
+                    }
 
-            public void onDeviceConnectionFailed() {
-                btConnect.setText("Unable to connect");
-            }
-        });
+                    public void onDeviceDisconnected() {
+                        btConnect.setText("Connection lost");
+                    }
 
-        btConnect.setOnClickListener(v -> {
-            if (bluetooth.getServiceState() == BluetoothState.STATE_CONNECTED) {
-                bluetooth.disconnect();
-            } else {
-                Intent intent = new Intent(getApplicationContext(), DeviceList.class);
-                startActivityForResult(intent, BluetoothState.REQUEST_CONNECT_DEVICE);
-            }
-        });
+                    public void onDeviceConnectionFailed() {
+                        btConnect.setText("Unable to connect");
+                    }
+                });
         onClickSwitch();
 
         fab.setOnClickListener(view -> {
-
             Intent intent = new Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH);
             intent.putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM);
             intent.putExtra(RecognizerIntent.EXTRA_LANGUAGE, Locale.getDefault());
@@ -132,7 +134,228 @@ public class MainActivity extends AppCompatActivity {
                 Toast.makeText(this, getResources().getString(R.string.no_support_voice), Toast.LENGTH_SHORT).show();
             }
         });
+    }
 
+    public void onStart() {
+        super.onStart();
+        if (!bluetooth.isBluetoothEnabled()) {
+            bluetooth.enable();
+        } else {
+            if (!bluetooth.isServiceAvailable()) {
+                bluetooth.setupService();
+                bluetooth.startService(BluetoothState.DEVICE_OTHER);
+            }
+        }
+    }
+
+    @Override
+    protected void onResume() {
+        super.onResume();
+    }
+
+    @Override
+    protected void onPause() {
+        super.onPause();
+    }
+
+    @Override
+    protected void onStop() {
+        super.onStop();
+    }
+
+    public void onDestroy() {
+        super.onDestroy();
+        bluetooth.stopService();
+        bluetooth.disconnect();
+    }
+
+    @OnClick({R.id.iv_led, R.id.iv_fan, R.id.iv_auto_door, R.id.bt_connect})
+    public void onClickMenu(View view) {
+        switch (view.getId()) {
+            case R.id.iv_auto_door:
+                layoutGara.setVisibility(View.VISIBLE);
+                layoutFan.setVisibility(View.GONE);
+                layoutLed.setVisibility(View.GONE);
+                break;
+            case R.id.iv_fan:
+                layoutGara.setVisibility(View.GONE);
+                layoutFan.setVisibility(View.VISIBLE);
+                layoutLed.setVisibility(View.GONE);
+                break;
+            case R.id.iv_led:
+                layoutGara.setVisibility(View.GONE);
+                layoutFan.setVisibility(View.GONE);
+                layoutLed.setVisibility(View.VISIBLE);
+                break;
+            case R.id.bt_connect:
+                if (bluetooth.getServiceState() == BluetoothState.STATE_CONNECTED) {
+                    bluetooth.disconnect();
+                } else {
+                    Intent intent = new Intent(getApplicationContext(), DeviceList.class);
+                    startActivityForResult(intent, BluetoothState.REQUEST_CONNECT_DEVICE);
+                }
+                break;
+        }
+    }
+
+    public void onClickSwitch() {
+        this.swtFan.setOnCheckedChangeListener((compoundButton, b) -> {
+            if (b) {
+                bluetooth.send(ON_FAN, true);
+                try {
+                    Thread.sleep(500);
+                } catch (InterruptedException e) {
+                    e.printStackTrace();
+                }
+                Log.e(TAG, "onClickSwitch: " + ON_FAN);
+            } else {
+                bluetooth.send(OFF_FAN, true);
+                Log.e(TAG, "onClickSwitch: " + OFF_FAN);
+            }
+        });
+
+        this.swtDoorGara.setOnCheckedChangeListener((compoundButton, b) -> {
+            if (b) {
+                try {
+                    Thread.sleep(500);
+                } catch (InterruptedException e) {
+                    e.printStackTrace();
+                }
+                bluetooth.send(ON_DOOR, true);
+                Log.e(TAG, "onClickSwitch: " + ON_DOOR);
+
+            } else {
+                try {
+                    Thread.sleep(500);
+                } catch (InterruptedException e) {
+                    e.printStackTrace();
+                }
+                bluetooth.send(OFF_DOOR, true);
+                Log.e(TAG, "onClickSwitch: " + OFF_DOOR);
+            }
+        });
+        this.swtLedGara.setOnCheckedChangeListener((compoundButton, b) -> {
+            if (b) {
+                try {
+                    Thread.sleep(500);
+                } catch (InterruptedException e) {
+                    e.printStackTrace();
+                }
+                bluetooth.send(ON_LED_GAR, true);
+                Log.e(TAG, "onClickSwitch: " + ON_LED_GAR);
+
+            } else {
+                try {
+                    Thread.sleep(500);
+                } catch (InterruptedException e) {
+                    e.printStackTrace();
+                }
+                bluetooth.send(OFF_LED_GAR, true);
+                Log.e(TAG, "onClickSwitch: " + OFF_LED_GAR);
+            }
+        });
+        this.swtLedLiv.setOnCheckedChangeListener((compoundButton, b) -> {
+            if (b) {
+                try {
+                    Thread.sleep(500);
+                } catch (InterruptedException e) {
+                    e.printStackTrace();
+                }
+                bluetooth.send(ON_LED_LIV, true);
+                Log.e(TAG, "onClickSwitch: " + ON_LED_LIV);
+            } else {
+                try {
+                    Thread.sleep(500);
+                } catch (InterruptedException e) {
+                    e.printStackTrace();
+                }
+                bluetooth.send(OFF_LED_LIV, true);
+                Log.e(TAG, "onClickSwitch: " + OFF_LED_LIV);
+
+            }
+        });
+        this.swtLedBath.setOnCheckedChangeListener((compoundButton, b) -> {
+            if (b) {
+
+                try {
+                    Thread.sleep(500);
+                } catch (InterruptedException e) {
+                    e.printStackTrace();
+                }
+                bluetooth.send(ON_LED_BATH, true);
+
+                Log.e(TAG, "onClickSwitch: " + ON_LED_BATH);
+            } else {
+                try {
+                    Thread.sleep(500);
+                } catch (InterruptedException e) {
+                    e.printStackTrace();
+                }
+                bluetooth.send(OFF_LED_BATH, true);
+
+                Log.e(TAG, "onClickSwitch: " + OFF_LED_BATH);
+            }
+        });
+        this.swtLedBed.setOnCheckedChangeListener((compoundButton, b) -> {
+            if (b) {
+                try {
+                    Thread.sleep(500);
+                } catch (InterruptedException e) {
+                    e.printStackTrace();
+                }
+                bluetooth.send(ON_LED_BED, true);
+                Log.e(TAG, "onClickSwitch: " + ON_LED_BED);
+            } else {
+                try {
+                    Thread.sleep(500);
+                } catch (InterruptedException e) {
+                    e.printStackTrace();
+                }
+                bluetooth.send(OFF_LED_BED, true);
+                Log.e(TAG, "onClickSwitch: " + OFF_LED_BED);
+            }
+        });
+        this.swtLedOut.setOnCheckedChangeListener((compoundButton, b) -> {
+            if (b) {
+                try {
+                    Thread.sleep(500);
+                } catch (InterruptedException e) {
+                    e.printStackTrace();
+                }
+                bluetooth.send(ON_LED_OUT, true);
+                Log.e(TAG, "onClickSwitch: " + ON_LED_OUT);
+            } else {
+                try {
+                    Thread.sleep(500);
+                } catch (InterruptedException e) {
+                    e.printStackTrace();
+                }
+                bluetooth.send(OFF_LED_OUT, true);
+                Log.e(TAG, "onClickSwitch: " + OFF_LED_OUT);
+            }
+        });
+
+    }
+
+    public void onActivityResult(int requestCode, int resultCode, Intent data) {
+        if (requestCode == BluetoothState.REQUEST_CONNECT_DEVICE) {
+            if (resultCode == Activity.RESULT_OK)
+                bluetooth.connect(data);
+        } else if (requestCode == BluetoothState.REQUEST_ENABLE_BT) {
+            if (resultCode == Activity.RESULT_OK) {
+                bluetooth.setupService();
+            } else {
+                Toast.makeText(getApplicationContext()
+                        , "Bluetooth was not enabled."
+                        , Toast.LENGTH_SHORT).show();
+                finish();
+            }
+        } else if (requestCode == REQ_CODE) {
+            if (resultCode == RESULT_OK && null != data) {
+                ArrayList result = data.getStringArrayListExtra(RecognizerIntent.EXTRA_RESULTS);
+                this.onResultVoid(result.get(0).toString());
+            }
+        }
     }
 
     private void onResultVoid(String result_message) {
@@ -167,136 +390,11 @@ public class MainActivity extends AppCompatActivity {
             bluetooth.send(ON_FAN, true);
         } else if (result_message.equalsIgnoreCase("turn off fan")) {
             bluetooth.send(OFF_FAN, true);
+        } else if (result_message.equalsIgnoreCase("turn on")) {
+            bluetooth.send(TURN_ON, true);
+        } else if (result_message.equalsIgnoreCase("turn off")) {
+            bluetooth.send(TURN_OFF, true);
         }
-    }
 
-    public void onStart() {
-        super.onStart();
-        if (!bluetooth.isBluetoothEnabled()) {
-            bluetooth.enable();
-        } else {
-            if (!bluetooth.isServiceAvailable()) {
-                bluetooth.setupService();
-                bluetooth.startService(BluetoothState.DEVICE_OTHER);
-            }
-        }
-    }
-
-    public void onDestroy() {
-        super.onDestroy();
-        bluetooth.stopService();
-    }
-
-    @OnClick({R.id.iv_led, R.id.iv_fan, R.id.iv_auto_door})
-    public void onClickMenu(View view) {
-        switch (view.getId()) {
-            case R.id.iv_auto_door:
-                layoutGara.setVisibility(View.VISIBLE);
-                layoutFan.setVisibility(View.GONE);
-                layoutLed.setVisibility(View.GONE);
-                break;
-            case R.id.iv_fan:
-                layoutGara.setVisibility(View.GONE);
-                layoutFan.setVisibility(View.VISIBLE);
-                layoutLed.setVisibility(View.GONE);
-                break;
-            case R.id.iv_led:
-                layoutGara.setVisibility(View.GONE);
-                layoutFan.setVisibility(View.GONE);
-                layoutLed.setVisibility(View.VISIBLE);
-                break;
-        }
-    }
-
-    public void onClickSwitch() {
-        this.swtFan.setOnCheckedChangeListener((compoundButton, b) -> {
-            if (b) {
-                bluetooth.send(ON_FAN, true);
-            } else {
-                bluetooth.send(OFF_FAN, true);
-            }
-        });
-
-        this.swtDoorGara.setOnCheckedChangeListener((compoundButton, b) -> {
-            if (b) {
-                bluetooth.send(ON_DOOR, true);
-            } else {
-                bluetooth.send(OFF_DOOR, true);
-            }
-        });
-        this.swtLedGara.setOnCheckedChangeListener((compoundButton, b) -> {
-            if (b) {
-                bluetooth.send(ON_LED_GAR, true);
-            } else {
-                bluetooth.send(OFF_LED_GAR, true);
-            }
-        });
-        this.swtLedLiv.setOnCheckedChangeListener((compoundButton, b) -> {
-            if (b) {
-                bluetooth.send(ON_LED_LIV, true);
-            } else {
-                bluetooth.send(OFF_LED_LIV, true);
-            }
-        });
-        this.swtLedBath.setOnCheckedChangeListener((compoundButton, b) -> {
-            if (b) {
-                bluetooth.send(ON_LED_BATH, true);
-            } else {
-                bluetooth.send(OFF_LED_BATH, true);
-            }
-        });
-        this.swtLedBed.setOnCheckedChangeListener((compoundButton, b) -> {
-            if (b) {
-                bluetooth.send(ON_LED_BED, true);
-            } else {
-                bluetooth.send(OFF_LED_BED, true);
-            }
-        });
-        this.swtLedOut.setOnCheckedChangeListener((compoundButton, b) -> {
-            if (b) {
-                bluetooth.send(ON_LED_OUT, true);
-            } else {
-                bluetooth.send(OFF_LED_OUT, true);
-            }
-        });
-        this.swtDoorGara.setOnCheckedChangeListener((compoundButton, b) -> {
-            if (b) {
-                bluetooth.send(ON_LED_GAR, true);
-            } else {
-                bluetooth.send(OFF_LED_GAR, true);
-            }
-        });
-
-    }
-
-    public void onActivityResult(int requestCode, int resultCode, Intent data) {
-        if (requestCode == BluetoothState.REQUEST_CONNECT_DEVICE) {
-            if (resultCode == Activity.RESULT_OK)
-                bluetooth.connect(data);
-        } else if (requestCode == BluetoothState.REQUEST_ENABLE_BT) {
-            if (resultCode == Activity.RESULT_OK) {
-                bluetooth.setupService();
-            } else {
-                Toast.makeText(getApplicationContext()
-                        , "Bluetooth was not enabled."
-                        , Toast.LENGTH_SHORT).show();
-                finish();
-            }
-        } else if (requestCode == REQ_CODE) {
-            if (resultCode == RESULT_OK && null != data) {
-                ArrayList result = data.getStringArrayListExtra(RecognizerIntent.EXTRA_RESULTS);
-                this.onResultVoid(result.get(0).toString());
-            }
-        }
-    }
-
-    @Override
-    protected void onPause() {
-        super.onPause();
-    }
-
-    @Override
-    protected void onResume() {
-        super.onResume();
     }
 }
